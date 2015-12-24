@@ -64,7 +64,7 @@ var landY = 380; //default to land on ground
 * Platforms must be ordered from lowest to highest
 */
 var level = level || 1;
-var platforms;
+var platforms,lavas;
 var currentPlatform=0, fallIndex=0;
 
 //When the canvas is ready, initialize
@@ -313,10 +313,10 @@ function goToNextLevel()
 		level++;
 	}
 	
-	chefInPos = chefInPosition(0,0);
+	chefInPos = chefInPosition(0,380);
 	if(!chefInPos)
 	{
-		pidChef(0,0);
+		pidChef(0,380);
 	}
 	
 	levelcomplete = false;
@@ -334,10 +334,15 @@ function goToNextLevel()
 		steaks[ii].scorable = true;
 	}
 	
+	lavas = stageLoader.getLavas(level);
+	
 	grill.setX(stageLoader.getGrillX(level));
 	grill.setY(stageLoader.getGrillY(level));
 	grill.setWidth(64);
 	grill.setHeight(64);
+	
+	xMax = stageLoader.getXMax(level);
+	yMax = stageLoader.getYMax(level);
 	
 	if(currentPlatform>0)
 	{
@@ -352,7 +357,7 @@ function goToNextLevel()
 }
 
 
-/* Scrolling */
+/* Scrolling X */
 function pidXScrollLeft()
 {
 	var pace = 0.05;
@@ -376,62 +381,33 @@ function pidXScrollRight()
 	refX += xErr;
 }
 
+/* Scrolling Y */
+function pidYScrollDown()
+{
+	var pace = 0.05;
+	var y = chef.y;
+	
+	yErr = (17*canvas.height/32) - y;
+	
+	yErr *= pace;
+	
+	refY += yErr;
+}
+function pidYScrollUp()
+{
+	var pace = 0.05;
+	var y = chef.y;
+	
+	yErr = (13*canvas.height/32) - y;
+	
+	yErr *= pace;
+	
+	refY += yErr;
+}
+
 Game.update = function()
 {
-	if(level>1)
-	{
-		/*console.log("Y REF = " + refY + "| CHEF Y = " + chef.y);
-		
-		//Sidescrolling activates
-		if(chef.y < (canvas.height/4) - refY)
-		{
-			refY = (canvas.height/4) - chef.y;
-		}
-		
-		else
-		{
-			if(refY > 0)
-			{
-				//refY -= chef.y - (canvas.height/2);
-			}
-		}
-		
-		if(refY<0)
-		{
-			refY=0;
-		}*/
-		
-		/* X Scrolls */
-		console.log("REF X = " + refX + " | CHEF X = " + chef.x);
-		if(refX < 0)
-		{
-			if((chef.x) <= (15*canvas.width/32) && oldChefX > chef.x) //Only scroll when just past center and when chef has moved left
-			{
-				console.log("Scrolling Left");
-				pidXScrollLeft();
-			}
-		}
-		
-		if(xMax + refX > canvas.width)
-		{
-			if(chef.x >= (17*canvas.width/32) && oldChefX < chef.x) 
-			{
-				console.log("Scrolling Right");
-				pidXScrollRight();
-			}
-		}
-		
-		//X Reference boundaries
-		if(refX > 0)
-		{
-			refX = 0;
-		}
-		if(xMax + refX < canvas.width) //xMax always must be > canvas.width
-		{
-			refX = canvas.width - xMax;
-		}
-		
-	}
+	
 	//console.log("Current Platform: " + currentPlatform);
 	if (isJumping) {
 		
@@ -585,6 +561,70 @@ Game.update = function()
 		}
 	}
 	
+	if(level>1) //SCROLLING MAGIC
+	{
+		/*Y Scrolls */
+		console.log("REF Y = " + refY + " | Y MAX = " + Math.abs(yMax));
+		if(refY > 0)
+		{
+			if(chef.y >= (17*canvas.height/32) && oldChefY < chef.y) //Only scroll when just past center and when chef has moved down
+			{
+				console.log("Scrolling Down");
+				pidYScrollDown();
+			}
+		}
+		if(refY < Math.abs(yMax))
+		{
+			if(chef.y <= (15*canvas.height/32) && oldChefY > chef.y) //Only scroll when just past center and when chef has moved up
+			{
+				console.log("Scrolling Up");
+				pidYScrollUp();
+			}
+		}
+		
+		//TODO: Figure out tolerances so that Physics aren't messed up by scrolls
+		
+		if(refY < 0)
+		{
+			refY = 0;
+		}
+		if(refY > Math.abs(yMax))
+		{
+			refY = Math.abs(yMax);
+		}
+		
+		/* X Scrolls */
+		//console.log("Old Chef X = " + oldChefX + " | Chef X = " + chef.x);
+		if(refX < 0)
+		{
+			if((chef.x) <= (15*canvas.width/32) && oldChefX > chef.x) //Only scroll when just past center and when chef has moved left
+			{
+				console.log("Scrolling Left");
+				pidXScrollLeft();
+			}
+		}
+		
+		if(xMax + refX > canvas.width)
+		{
+			if(chef.x >= (17*canvas.width/32) && oldChefX < chef.x) //Only scroll when just past center and when chef has moved right
+			{
+				console.log("Scrolling Right");
+				pidXScrollRight();
+			}
+		}
+		
+		//X Reference boundaries
+		if(refX > 0)
+		{
+			refX = 0;
+		}
+		if(xMax + refX < canvas.width) //xMax always must be > canvas.width
+		{
+			refX = canvas.width - xMax;
+		}
+		
+	}
+	
 	hat.x = chef.x;
 	oldChefX = chef.x;
 	oldChefY = chef.y;
@@ -626,13 +666,13 @@ Game.update = function()
 
 Game.paint = function()
 {
-	
 	//Background
 	ctx.fillStyle = "#DDF4FF";
 	ctx.fillRect(0,0,canvas.width, canvas.height);
+	/*
 	ctx.fillStyle = "#FF0000";
 	ctx.fillRect(17*canvas.width/32,380,canvas.width - 17*canvas.width/32, 100);
-	ctx.fillRect(0,380,15*canvas.width/32, 100);
+	ctx.fillRect(0,380,15*canvas.width/32, 100);*/
 	
 	//THE GROUND IS PLATFORM 0
 
@@ -643,6 +683,13 @@ Game.paint = function()
 		ctx.fillRect(platforms[ii].getX() + refX,platforms[ii].getY() + refY ,platforms[ii].getWidth(), platforms[ii].getHeight());
 	}
 	
+	//lavas
+	for(var ii=0;ii<lavas.length;ii++)
+	{
+		ctx.fillStyle = "#FF0000";
+		ctx.fillRect(lavas[ii].getX() + refX,lavas[ii].getY() + refY ,lavas[ii].getWidth(), lavas[ii].getHeight());
+	}
+	
 	//console.log(steaks.length);
 	
 	//steaks
@@ -651,6 +698,7 @@ Game.paint = function()
 		drawer.drawSprite(steaks[ii],steaks[ii].x,steaks[ii].y);
 	}
 	
+	ctx.fillStyle = "#000000";
 	drawer.drawText("Score: "+score,"20px Arial", 5,20);
 	
 	
@@ -661,7 +709,7 @@ Game.paint = function()
 	//chef.draw(ctx);
 	drawer.drawSprite(chef,chef.x,chef.y);
 	
-	drawer.drawSprite(grill, grill.x, grill.y);
+	drawer.drawSprite(grill, grill.x + refX, grill.y + refY);
 	
 	if(!isFire)
 	{
