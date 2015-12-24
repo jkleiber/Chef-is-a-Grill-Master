@@ -21,7 +21,7 @@ var StageLoader = function(canvas){
 						[new Platform(0,444,1200, (480-444)), new Platform(0,300,100, 20), new Platform(0,150,100, 20), new Platform(0,30,100, 20)]
 						];
 	this.lavas = [	[],
-					[new Platform(120,444,1100,(480-444))]
+					[new Platform(120,444,900,(480-444))]
 					];
 	this.steaks = [	[new Sprite(180,160,"./graphics/steak.png"), new Sprite(400,380,"./graphics/steak.png"), new Sprite(600,220,"./graphics/steak.png"), new Sprite(750,220,"./graphics/steak.png")],
 					[]
@@ -30,7 +30,7 @@ var StageLoader = function(canvas){
 						[]
 						];
 	this.grills = [	[100,36],
-					[1200,380]
+					[1100,380]
 					];
 	
 };

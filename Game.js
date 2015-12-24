@@ -3,6 +3,7 @@
 //Game Management
 var timer = new Timer();
 var stageLoader;
+var firstRun=true;
 var isPlaying;
 var levelcomplete = false;
 var nextLevelTransition=false;
@@ -48,6 +49,7 @@ var steakMids = [];
 var enRoute = [];
 
 /* Physics */
+var defyPhysics = false;
 
 //Jumps
 var yVel = 0;
@@ -55,6 +57,7 @@ var yVel = 0;
 var gravity = .7;
 var isJumping = false;
 var isFalling = false;
+var fallTargetLocked=false, targetPlatform=0;
 var landY = 380; //default to land on ground
 
 
@@ -63,7 +66,7 @@ var landY = 380; //default to land on ground
 * Platform 0 is always the ground 
 * Platforms must be ordered from lowest to highest
 */
-var level = level || 1;
+var level = level || 2;
 var platforms,lavas;
 var currentPlatform=0, fallIndex=0;
 
@@ -105,6 +108,7 @@ function fall()
         yVel = -5;
 		hat_yVel = -7;
         isFalling = true;
+		fallTargetLocked = false;
     }
 }
 
@@ -162,8 +166,10 @@ function whereWillChefFall()
 		
 		if(land)
 		{
-			landY = platforms[ii].y - 64 + refY;
-			currentPlatform = ii;
+			//landY = platforms[ii].y - 64 + refY;
+			fallTargetLocked = true;
+			targetPlatform = ii;
+			//currentPlatform = ii;
 			//console.log("Chef will fall to y = " + landY);
 			break;
 		}
@@ -293,7 +299,7 @@ function goToNextLevel()
 	//do cool transition, depending on the level
 	//begin level
 	
-	if(level==1)//only do this stuff on first run
+	if(firstRun)//only do this stuff on first run
 	{
 		/*Sprites*/
 		chef = new Sprite(0,380);
@@ -306,6 +312,8 @@ function goToNextLevel()
 		grill = new Sprite(stageLoader.getGrillX(1),stageLoader.getGrillY(1),"./graphics/grill.png");
 		grill.setWidth(64);
 		grill.setHeight(64);
+		
+		firstRun = false;
 	}
 	
 	if(levelcomplete)
@@ -384,10 +392,10 @@ function pidXScrollRight()
 /* Scrolling Y */
 function pidYScrollDown()
 {
-	var pace = 0.05;
+	var pace = 0.175;
 	var y = chef.y;
 	
-	yErr = (17*canvas.height/32) - y;
+	yErr = (canvas.height/3) - y;
 	
 	yErr *= pace;
 	
@@ -395,10 +403,10 @@ function pidYScrollDown()
 }
 function pidYScrollUp()
 {
-	var pace = 0.05;
+	var pace = 0.033;
 	var y = chef.y;
 	
-	yErr = (13*canvas.height/32) - y;
+	yErr = (canvas.height/3) - y;
 	
 	yErr *= pace;
 	
@@ -481,7 +489,24 @@ Game.update = function()
 			}
 		
 			//console.log("Chef Y = " + chef.y);
-			whereWillChefFall();
+			if(!fallTargetLocked)
+			{
+				whereWillChefFall();
+			}
+			
+			if(chef.x != oldChefX)
+			{
+				fallTargetLocked = false;
+			}
+			
+			var yErr = 0;
+			if(refY > 0)
+			{
+				yErr = (canvas.height/3) - chef.y;
+				yErr *= .175;
+			}
+			
+			landY = platforms[targetPlatform].y + (refY - yErr) - 64;
 			
 			yVel += gravity;
 			chef.y += yVel;
@@ -491,6 +516,7 @@ Game.update = function()
 			
 			if (chef.y >= landY) 
 			{
+				currentPlatform = targetPlatform;
 				chef.y = landY;
 				hat.y = landY;
 				yVel = 0;
@@ -564,10 +590,10 @@ Game.update = function()
 	if(level>1) //SCROLLING MAGIC
 	{
 		/*Y Scrolls */
-		console.log("REF Y = " + refY + " | Y MAX = " + Math.abs(yMax));
+		console.log("REF Y = " + refY + " | CHEF Y = " + chef.y);
 		if(refY > 0)
 		{
-			if(chef.y >= (17*canvas.height/32) && oldChefY < chef.y) //Only scroll when just past center and when chef has moved down
+			if(chef.y > (canvas.height/3) && chef.y > oldChefY)
 			{
 				console.log("Scrolling Down");
 				pidYScrollDown();
@@ -575,14 +601,13 @@ Game.update = function()
 		}
 		if(refY < Math.abs(yMax))
 		{
-			if(chef.y <= (15*canvas.height/32) && oldChefY > chef.y) //Only scroll when just past center and when chef has moved up
+			if(chef.y + refY <= (canvas.height/3) )
 			{
 				console.log("Scrolling Up");
 				pidYScrollUp();
 			}
 		}
 		
-		//TODO: Figure out tolerances so that Physics aren't messed up by scrolls
 		
 		if(refY < 0)
 		{
@@ -683,12 +708,7 @@ Game.paint = function()
 		ctx.fillRect(platforms[ii].getX() + refX,platforms[ii].getY() + refY ,platforms[ii].getWidth(), platforms[ii].getHeight());
 	}
 	
-	//lavas
-	for(var ii=0;ii<lavas.length;ii++)
-	{
-		ctx.fillStyle = "#FF0000";
-		ctx.fillRect(lavas[ii].getX() + refX,lavas[ii].getY() + refY ,lavas[ii].getWidth(), lavas[ii].getHeight());
-	}
+	
 	
 	//console.log(steaks.length);
 	
@@ -722,6 +742,13 @@ Game.paint = function()
 	if(levelcomplete)
 	{
 		drawer.drawText("Level Complete!!!1!!","64px Arial", 200,200);
+	}
+	
+	//lavas
+	for(var ii=0;ii<lavas.length;ii++)
+	{
+		ctx.fillStyle = "#FF0000";
+		ctx.fillRect(lavas[ii].getX() + refX,lavas[ii].getY() + refY ,lavas[ii].getWidth(), lavas[ii].getHeight());
 	}
 }
 
