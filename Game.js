@@ -23,13 +23,17 @@ var refY = 0;
 var xMax = 1200;
 var yMax = 800;
 
+/* Controls */
+var space = false;
+var left=false, right=false;
+
 /* Sprites */
 
 //Chef
 var chef;
 var chef_speed = 5;
-var jumping=false, left=false, right=false, old_jump=false;
 var oldChefX, oldChefY;
+var chefRefX = 0;
 
 //Hat
 var hat;
@@ -49,7 +53,8 @@ var steakMids = [];
 var enRoute = [];
 
 /* Physics */
-var defyPhysics = false;
+var defyPhysics = false; 
+var nextPlatformY, nextY;
 
 //Jumps
 var yVel = 0;
@@ -58,6 +63,7 @@ var gravity = .7;
 var isJumping = false;
 var isFalling = false;
 var fallTargetLocked=false, targetPlatform=0;
+var jumpTargetLocked=false;
 var landY = 380; //default to land on ground
 
 
@@ -98,6 +104,7 @@ function jump() {
         yVel = -15;
 		hat_yVel = -15;
         isJumping = true;
+		jumpTargetLocked = false;
 		isFalling = false;
     }
 }
@@ -136,7 +143,7 @@ function canChefLand(ii)
 	return false;
 }
 
-function whereWillChefLand()
+function whereWillChefJump()
 {
 	var land = false;
 	var limit = chefBestAbove();
@@ -147,6 +154,7 @@ function whereWillChefLand()
 		
 		if(land)
 		{
+			
 			landY = platforms[ii].y + refY - 64;
 			currentPlatform = ii;
 			//console.log("Chef will land at y = " + landY);
@@ -363,44 +371,8 @@ function goToNextLevel()
 		nextLevelTransition = false;
 	}
 }
-
-
-/* Scrolling X */
-function pidXScrollLeft()
-{
-	var pace = 0.05;
-	var x = chef.x;
-	
-	xErr = (15*canvas.width/32) - x;
-	
-	xErr *= pace;
-	
-	refX += xErr;
-}
-function pidXScrollRight()
-{
-	var pace = 0.05;
-	var x = chef.x;
-	
-	xErr = (17*canvas.width/32) - x;
-	
-	xErr *= pace;
-	
-	refX += xErr;
-}
-
 /* Scrolling Y */
-function pidYScrollDown()
-{
-	var pace = 0.175;
-	var y = chef.y;
-	
-	yErr = (canvas.height/3) - y;
-	
-	yErr *= pace;
-	
-	refY += yErr;
-}
+
 function pidYScrollUp()
 {
 	var pace = 0.033;
@@ -417,9 +389,46 @@ Game.update = function()
 {
 	
 	//console.log("Current Platform: " + currentPlatform);
+	if(left)
+	{
+		chef.setOrientation("left");
+		if(!isJumping && !isFalling)
+		{
+			chef.setImage("./graphics/chef_left.png");
+		}
+		
+		if(chef.getX()>0)
+		{
+			chef.setX(chef.getX()-chef_speed);
+		}
+		else
+		{
+			chef.setX(0);
+		}
+	}
+	if(right)
+	{
+		chef.setOrientation("right");
+		if(!isJumping && !isFalling)
+		{
+			chef.setImage("./graphics/chef.png");
+		}
+		
+		
+		//console.log((chef.x+64) + " vs " + canvas.width);
+		if((chef.x + chefRefX + 64) < canvas.width) //chef is 64 px wide
+		{
+			chef.setX(chef.getX()+chef_speed);
+		}
+		else
+		{
+			chef.setX(canvas.width - chefRefX - 64);
+		}
+	}
+	
 	if (isJumping) {
 		
-		whereWillChefLand();
+		
 		
 		if(chef.getOrientation() == "right")
 		{
@@ -431,6 +440,8 @@ Game.update = function()
 			chef.setImage("./graphics/chef_left_no_hat.png");
 			hat.setImage("./graphics/hat_left.png");
 		}
+		
+		whereWillChefJump();
 		
 		yVel += gravity;
 		chef.y += yVel;
@@ -473,6 +484,7 @@ Game.update = function()
 		}
 	}
 	
+	
 	if(isFalling)
 	{
 		if(currentPlatform>=0)
@@ -499,22 +511,31 @@ Game.update = function()
 				fallTargetLocked = false;
 			}
 			
-			var yErr = 0;
-			if(refY > 0)
-			{
-				yErr = (canvas.height/3) - chef.y;
-				yErr *= .175;
-			}
-			
-			landY = platforms[targetPlatform].y + (refY - yErr) - 64;
-			
 			yVel += gravity;
 			chef.y += yVel;
 			
 			hat_yVel += hat_gravity;
 			hat.y += hat_yVel;
 			
-			if (chef.y >= landY) 
+			var yErr = 0;
+			nextY = chef.y + yVel + gravity;
+			
+			//console.log(chef.y);			
+			//console.log(nextY);	
+			
+			if(refY > 0 && (chef.y > (canvas.height/3)))
+			{
+				console.log("true");
+				yErr = chef.y - oldChefY; //the scrolling problem was caused because this problem is counter-intuitive
+				//chef.y > oldChefY always because it is falling and the y coords are reversed
+			}
+			
+			//nextPlatformY = platforms[targetPlatform].y + (refY - yErr) - 64 + nextY - chef.y;
+			
+			landY = platforms[targetPlatform].y + (refY - yErr) - 64;	
+			console.log(landY + " : " + (refY - yErr) + " : " + yErr );
+			
+			if (chef.y >= landY || Math.abs(chef.y - landY) <= 1) 
 			{
 				currentPlatform = targetPlatform;
 				chef.y = landY;
@@ -525,43 +546,11 @@ Game.update = function()
 		}
 	}
 	
+	if(space)
+	{
+		console.log("CY: " + chef.y + " \ PY: " + (platforms[currentPlatform].y - 64 + refY) + " \ CP: " + currentPlatform + " \ RY: " + refY);
+	}
 	
-	if(left)
-	{
-		chef.setOrientation("left");
-		if(!isJumping && !isFalling)
-		{
-			chef.setImage("./graphics/chef_left.png");
-		}
-		
-		if(chef.getX()>0)
-		{
-			chef.setX(chef.getX()-chef_speed);
-		}
-		else
-		{
-			chef.setX(0);
-		}
-	}
-	if(right)
-	{
-		chef.setOrientation("right");
-		if(!isJumping && !isFalling)
-		{
-			chef.setImage("./graphics/chef.png");
-		}
-		
-		
-		//console.log((chef.x+64) + " vs " + canvas.width);
-		if((chef.x + 64) < canvas.width) //chef is 64 px wide
-		{
-			chef.setX(chef.getX()+chef_speed);
-		}
-		else
-		{
-			chef.setX(canvas.width - 64);
-		}
-	}
 	for(var ii=0;ii<steaks.length;ii++)
 	{
 		hover(steaks[ii],steakMids[ii],5);
@@ -586,24 +575,29 @@ Game.update = function()
 			enRoute.splice(ii,1);
 		}
 	}
-	
-	if(level>1) //SCROLLING MAGIC
-	{
+	/*
+	* Scrolling Logic Below
+	* Scrolling must be after all motion stuff so that we can use position deltas
+	* Variables such as refX do not change physics stuff. Their purpose is to create a scrolling visual effect
+	*/
+	//if(level>1) 
+	//{
 		/*Y Scrolls */
-		console.log("REF Y = " + refY + " | CHEF Y = " + chef.y);
+		//console.log("REF Y = " + refY + " | CHEF Y = " + chef.y + " | Old Chef Y = " + oldChefY);
 		if(refY > 0)
 		{
-			if(chef.y > (canvas.height/3) && chef.y > oldChefY)
+			if(chef.y > (canvas.height/3)  && chef.y > oldChefY)
 			{
-				console.log("Scrolling Down");
-				pidYScrollDown();
+				//console.log("Scrolling Down");
+				refY += oldChefY - chef.y;
+				//pidYScrollDown();
 			}
 		}
 		if(refY < Math.abs(yMax))
 		{
-			if(chef.y + refY <= (canvas.height/3) )
+			if(chef.y + refY <= (canvas.height/3) && chef.y != oldChefY)
 			{
-				console.log("Scrolling Up");
+				//console.log("Scrolling Up");
 				pidYScrollUp();
 			}
 		}
@@ -619,22 +613,26 @@ Game.update = function()
 		}
 		
 		/* X Scrolls */
-		//console.log("Old Chef X = " + oldChefX + " | Chef X = " + chef.x);
+		//console.log("ref X = " + refX + " | Chef X = " + chef.x + " | ChefRefX = "+ chefRefX + " | Real Chef X = " + (chef.x + chefRefX));
 		if(refX < 0)
 		{
-			if((chef.x) <= (15*canvas.width/32) && oldChefX > chef.x) //Only scroll when just past center and when chef has moved left
+			if(chef.x + chefRefX <= (31*canvas.width/64) && oldChefX > chef.x) //Only scroll when just past center and when chef has moved left
 			{
-				console.log("Scrolling Left");
-				pidXScrollLeft();
+				//console.log("Scrolling Left");
+				//pidXScrollLeft();
+				refX += Math.abs(chef.x - oldChefX);
+				chefRefX = refX
 			}
 		}
-		
+	
 		if(xMax + refX > canvas.width)
 		{
-			if(chef.x >= (17*canvas.width/32) && oldChefX < chef.x) //Only scroll when just past center and when chef has moved right
+			if(chef.x+chefRefX >= (33*canvas.width/64) && oldChefX < chef.x) //Only scroll when just past center and when chef has moved right
 			{
-				console.log("Scrolling Right");
-				pidXScrollRight();
+				//console.log("Scrolling Right");
+				//pidXScrollRight();
+				refX -= Math.abs(chef.x - oldChefX);
+				chefRefX = refX;
 			}
 		}
 		
@@ -642,13 +640,13 @@ Game.update = function()
 		if(refX > 0)
 		{
 			refX = 0;
+			chefRefX=0;
 		}
 		if(xMax + refX < canvas.width) //xMax always must be > canvas.width
 		{
 			refX = canvas.width - xMax;
 		}
-		
-	}
+	//}
 	
 	hat.x = chef.x;
 	oldChefX = chef.x;
@@ -677,7 +675,7 @@ Game.update = function()
 		if(chefCollision(grill) && !levelcomplete)
 		{
 			levelcomplete = true;
-			platforms.push(new Platform(0,100,canvas.width,20));
+			//platforms.push(new Platform(0,100,canvas.width,20));
 			nextLevelTransition = true;
 		}
 	}
@@ -694,10 +692,7 @@ Game.paint = function()
 	//Background
 	ctx.fillStyle = "#DDF4FF";
 	ctx.fillRect(0,0,canvas.width, canvas.height);
-	/*
-	ctx.fillStyle = "#FF0000";
-	ctx.fillRect(17*canvas.width/32,380,canvas.width - 17*canvas.width/32, 100);
-	ctx.fillRect(0,380,15*canvas.width/32, 100);*/
+	
 	
 	//THE GROUND IS PLATFORM 0
 
@@ -724,10 +719,11 @@ Game.paint = function()
 	
 	if(isJumping || isFalling)
 	{
-		hat.draw(ctx);
+		//hat.draw(ctx);
+		drawer.drawSprite(hat, hat.x+chefRefX, hat.y);
 	}
 	//chef.draw(ctx);
-	drawer.drawSprite(chef,chef.x,chef.y);
+	drawer.drawSprite(chef,chef.x + chefRefX ,chef.y);
 	
 	drawer.drawSprite(grill, grill.x + refX, grill.y + refY);
 	
@@ -750,6 +746,10 @@ Game.paint = function()
 		ctx.fillStyle = "#FF0000";
 		ctx.fillRect(lavas[ii].getX() + refX,lavas[ii].getY() + refY ,lavas[ii].getWidth(), lavas[ii].getHeight());
 	}
+	
+	
+	ctx.fillStyle = "#00FF00";
+	ctx.fillRect(0,0,10,canvas.height/2);
 }
 
 Game.fps = 50;
@@ -836,6 +836,12 @@ $(document).keydown(function(event)
 	var key = event.keyCode;
 	if(userControl)
 	{
+		if(key == 32)
+		{
+			//Spacebar
+			
+			space=true;
+		}
 		if(key == 37)
 		{
 			//left arrow
@@ -870,6 +876,11 @@ $(document).keydown(function(event)
 $(document).keyup(function(event)
 {
 	var key = event.keyCode;
+	if(key == 32)
+	{
+		//Spacebar
+		space=false;
+	}
 	if(key == 37)
 	{
 		//left arrow

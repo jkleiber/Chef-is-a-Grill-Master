@@ -18,7 +18,7 @@ var StageLoader = function(canvas){
 	this.yMaxes = [0,-200];
 	this.levelNames = ["Tutorial","The First BBQ"];
 	this.platforms = [	[new Platform(0,444,canvas.width, (480-444)),new Platform(500,330,300,20), new Platform(200,240,150,20), new Platform(100,100,100,20)],
-						[new Platform(0,444,1200, (480-444)), new Platform(0,300,100, 20), new Platform(0,150,100, 20), new Platform(0,30,100, 20)]
+						[new Platform(0,444,1200, (480-444)), new Platform(0,300,100, 20), new Platform(900,300,100, 20), new Platform(0,150,100, 20), new Platform(0,40,200, 20), new Platform(0,30,100, 20)]
 						];
 	this.lavas = [	[],
 					[new Platform(120,444,900,(480-444))]
