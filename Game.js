@@ -11,6 +11,15 @@ var score = 0, levelscore=0;
 var userControl = true;
 var chefInPos = true;
 
+//Transitions
+var transitionFirstRun = true;
+var transitionStart = 0, transitionEnd = 0;
+var userCanConfirm = false;
+var userConfirmedTransition = false;
+
+//Victory Pause
+var victoryFirst = true;
+var victoryStart = 0, victoryEnd = 0;
 
 /* Drawing */
 var ctx;
@@ -22,6 +31,10 @@ var refY = 0;
 
 var xMax = 1200;
 var yMax = 800;
+
+var scrollStart = 0;
+var scrollEnd = 0;
+var scrollDiff = 0;
 
 /* Controls */
 var space = false;
@@ -47,7 +60,7 @@ var fire = 0;
 var firstfire;
 
 //Steak
-var startSteaks = 4;
+var startSteaks = 10000;
 var steaks;
 var steakMids = [];
 var enRoute = [];
@@ -55,6 +68,7 @@ var enRoute = [];
 /* Physics */
 var defyPhysics = false; 
 var nextPlatformY, nextY;
+var landed = false;
 
 //Jumps
 var yVel = 0;
@@ -72,7 +86,7 @@ var landY = 380; //default to land on ground
 * Platform 0 is always the ground 
 * Platforms must be ordered from lowest to highest
 */
-var level = level || 2;
+var level = level || 1;
 var platforms,lavas;
 var currentPlatform=0, fallIndex=0;
 
@@ -106,6 +120,7 @@ function jump() {
         isJumping = true;
 		jumpTargetLocked = false;
 		isFalling = false;
+		landed = false;
     }
 }
 
@@ -116,6 +131,7 @@ function fall()
 		hat_yVel = -7;
         isFalling = true;
 		fallTargetLocked = false;
+		landed = false;
     }
 }
 
@@ -206,11 +222,11 @@ function hover(sprite,middle,tolerance)
 
 function chefCollision(sprite)
 {
-	if (chef.y+64<sprite.y)
+	if (chef.y+64<sprite.y + refY)
 	{
         return false;
     }
-    if (chef.y>sprite.y+sprite.h)
+    if (chef.y>sprite.y+sprite.h + refY)
 	{
 		return false;
     }
@@ -243,19 +259,19 @@ function goToGrill(sprite)
 
 function onGrill(sprite)
 {
-	if (grill.y+64<sprite.y)
+	if (grill.y+refY+64<sprite.y + refY)
 	{
         return false;
     }
-    if (grill.y+22>sprite.y+sprite.h)
+    if (grill.y+22+refY>sprite.y+sprite.h+refY)
 	{
 		return false;
     }
-    if (grill.x+64<sprite.x)
+    if (grill.x+refX+64<sprite.x+refX)
 	{
 		return false;
     }
-    if (grill.x>sprite.w+sprite.x)
+    if (grill.x+refX>sprite.w+sprite.x+refX)
 	{
 		return false;
     }
@@ -307,6 +323,8 @@ function goToNextLevel()
 	//do cool transition, depending on the level
 	//begin level
 	
+	startSteaks = stageLoader.getStartSteaks(level);
+	
 	if(firstRun)//only do this stuff on first run
 	{
 		/*Sprites*/
@@ -329,11 +347,11 @@ function goToNextLevel()
 		level++;
 	}
 	
-	chefInPos = chefInPosition(0,380);
-	if(!chefInPos)
-	{
-		pidChef(0,380);
-	}
+	grill.setImage("./graphics/grill.png");
+	
+	chef.orient = "right";
+	chef.x = 0;
+	chef.y = 380;
 	
 	levelcomplete = false;
 	isFire = false;
@@ -349,6 +367,7 @@ function goToNextLevel()
 		steaks[ii].setHeight(32);
 		steaks[ii].scorable = true;
 	}
+	console.log(steaks.length);
 	
 	lavas = stageLoader.getLavas(level);
 	
@@ -365,10 +384,18 @@ function goToNextLevel()
 		fall();
 	}
 	
-	if(currentPlatform == 0 && chefInPos)
+	transitionEnd = timer.getTimestamp();
+	if(transitionEnd - transitionStart >= 1000){
+		userCanConfirm = true;
+	}
+	
+	if(currentPlatform == 0 && chefInPos && userConfirmedTransition)
 	{
 		userControl = true;
+		userCanConfirm = false;
 		nextLevelTransition = false;
+		transitionFirstRun = true;
+		victoryFirst = true;
 	}
 }
 /* Scrolling Y */
@@ -455,6 +482,7 @@ Game.update = function()
 			hat.y = landY;
             yVel = 0;
             isJumping = false;
+			landed = true;
         }
     }
 	else
@@ -487,6 +515,11 @@ Game.update = function()
 	
 	if(isFalling)
 	{
+		
+		if(scrollStart==0)
+		{
+			scrollStart = refY;
+		}
 		if(currentPlatform>=0)
 		{
 			if(chef.getOrientation() == "right")
@@ -518,37 +551,52 @@ Game.update = function()
 			hat.y += hat_yVel;
 			
 			var yErr = 0;
-			nextY = chef.y + yVel + gravity;
+			nextY = chef.y + (yVel + gravity);
 			
 			//console.log(chef.y);			
 			//console.log(nextY);	
 			
 			if(refY > 0 && (chef.y > (canvas.height/3)))
 			{
-				console.log("true");
-				yErr = chef.y - oldChefY; //the scrolling problem was caused because this problem is counter-intuitive
+				yErr = chef.y - oldChefY; //how much scrolling has been done since we just updated chef.y?
+				
+				//the scrolling problem was caused because this problem is counter-intuitive
 				//chef.y > oldChefY always because it is falling and the y coords are reversed
 			}
 			
-			//nextPlatformY = platforms[targetPlatform].y + (refY - yErr) - 64 + nextY - chef.y;
-			
-			landY = platforms[targetPlatform].y + (refY - yErr) - 64;	
-			console.log(landY + " : " + (refY - yErr) + " : " + yErr );
+			landY = platforms[targetPlatform].y + refY - 64;	
+			//landY = platforms[targetPlatform].y + (refY - yErr) - 64;	
+			//console.log(landY + " : " + chef.y + " : " + yErr );
+			//console.log(chef.y + " vs " + landY);
 			
 			if (chef.y >= landY || Math.abs(chef.y - landY) <= 1) 
 			{
+				scrollEnd = refY;
+				scrollDiff = scrollStart - scrollEnd;
+				scrollStart = 0;
+				
 				currentPlatform = targetPlatform;
-				chef.y = landY;
-				hat.y = landY;
+				
+				chef.y = platforms[currentPlatform].y - 64 + refY;
+				hat.y = chef.y;
+				//chef.y = landY;
+				//hat.y = landY;
+				
+				console.log("landed at " + chef.y);
+				
 				yVel = 0;
 				isFalling = false;
+				landed = true;
 			}
 		}
 	}
 	
 	if(space)
 	{
-		console.log("CY: " + chef.y + " \ PY: " + (platforms[currentPlatform].y - 64 + refY) + " \ CP: " + currentPlatform + " \ RY: " + refY);
+		//console.log(scrollDiff);
+		//console.log((platforms[targetPlatform].y - 64 + refY));
+		console.log("(" + chef.x + "," + (chef.y-refY) +")");
+		//console.log("CY: " + chef.y + " \ PY: " + (platforms[currentPlatform].y - 64 + refY) + " \ CP: " + currentPlatform + " \ RY: " + refY);
 	}
 	
 	for(var ii=0;ii<steaks.length;ii++)
@@ -564,17 +612,33 @@ Game.update = function()
 		}
 	}
 	
-	for(var ii=0;ii<enRoute.length;ii++)
+	var ei = 0;
+	while(ei < enRoute.length)
 	{
-		goToGrill(steaks[enRoute[ii]]);
+		//console.log(enRoute[ei]);
+		goToGrill(steaks[enRoute[ei]]);
 		
-		if(onGrill(steaks[enRoute[ii]]))
+		if(onGrill(steaks[enRoute[ei]]))
 		{
-			steaks.splice(enRoute[ii],1);
-			steakMids.splice(enRoute[ii],1);
-			enRoute.splice(ii,1);
+			var removed = enRoute[ei];
+			enRoute.splice(ei,1);
+			steaks.splice(enRoute[ei],1);
+			steakMids.splice(enRoute[ei],1);
+			
+			for(var ii=0;ii<enRoute.length;ii++)
+			{
+				if(enRoute[ii] > removed)
+				{
+					enRoute[ii]--;
+				}
+			}
+			
+			ei = -1;
 		}
+		
+		ei++;
 	}
+	
 	/*
 	* Scrolling Logic Below
 	* Scrolling must be after all motion stuff so that we can use position deltas
@@ -586,7 +650,9 @@ Game.update = function()
 		//console.log("REF Y = " + refY + " | CHEF Y = " + chef.y + " | Old Chef Y = " + oldChefY);
 		if(refY > 0)
 		{
-			if(chef.y > (canvas.height/3)  && chef.y > oldChefY)
+			//scroll if we are falling
+			//by creating a flag, landed, we do not need to wait for the next loop to end the fall/jump. This prevents overshoot
+			if(chef.y > (canvas.height/3)  && chef.y > oldChefY && !landed)
 			{
 				//console.log("Scrolling Down");
 				refY += oldChefY - chef.y;
@@ -676,80 +742,117 @@ Game.update = function()
 		{
 			levelcomplete = true;
 			//platforms.push(new Platform(0,100,canvas.width,20));
-			nextLevelTransition = true;
+			//nextLevelTransition = true;
 		}
+	}
+	
+	//console.log(levelcomplete);
+	if(victoryFirst && levelcomplete)
+	{
+		userControl = false;
+		victoryStart = timer.getTimestamp();
+		victoryFirst = false;
+	}
+	
+	if(timer.getTimestamp() - victoryStart > 1000 && levelcomplete)
+	{
+		nextLevelTransition = true;
 	}
 	
 	if(nextLevelTransition)
 	{
+		if(transitionFirstRun)
+		{
+			transitionStart = timer.getTimestamp();
+			transitionFirstRun = false;
+		}
 		userControl = false;
 		goToNextLevel();
 	}
+	
 }
 
 Game.paint = function()
 {
-	//Background
-	ctx.fillStyle = "#DDF4FF";
-	ctx.fillRect(0,0,canvas.width, canvas.height);
-	
-	
-	//THE GROUND IS PLATFORM 0
-
-	//platforms
-	for(var ii=0;ii<platforms.length;ii++)
+	if(!nextLevelTransition) //if we are playing
 	{
+		//Background
+		ctx.fillStyle = "#DDF4FF";
+		ctx.fillRect(0,0,canvas.width, canvas.height);
+		
+		
+		//THE GROUND IS PLATFORM 0
+	
+		//platforms
+		for(var ii=0;ii<platforms.length;ii++)
+		{
+			ctx.fillStyle = "#000000";
+			ctx.fillRect(platforms[ii].getX() + refX,platforms[ii].getY() + refY ,platforms[ii].getWidth(), platforms[ii].getHeight());
+		}
+		
+		
+		
+		//console.log(steaks.length);
+		
+		//steaks
+		for(var ii=0;ii<steaks.length;ii++)
+		{
+			drawer.drawSprite(steaks[ii],steaks[ii].x + refX,steaks[ii].y + refY);
+		}
+		
 		ctx.fillStyle = "#000000";
-		ctx.fillRect(platforms[ii].getX() + refX,platforms[ii].getY() + refY ,platforms[ii].getWidth(), platforms[ii].getHeight());
+		drawer.drawText("Score: "+score,"20px Arial", 5,20);
+		
+		
+		if(isJumping || isFalling)
+		{
+			//hat.draw(ctx);
+			drawer.drawSprite(hat, hat.x+chefRefX, hat.y);
+		}
+		//chef.draw(ctx);
+		drawer.drawSprite(chef,chef.x + chefRefX ,chef.y);
+		
+		drawer.drawSprite(grill, grill.x + refX, grill.y + refY);
+		
+		if(level==0)
+		{
+			if(!isFire)
+			{
+				drawer.drawText("Collect the steaks!","30px Arial", 500,30);
+			}
+			else if(isFire && !levelcomplete)
+			{
+				drawer.drawText("Go to the Grill!","30px Arial", 500,30);
+			}
+			if(levelcomplete)
+			{
+				drawer.drawText("Level Complete!!!1!!","64px Arial", 200,200);
+			}
+		}
+		//lavas
+		for(var ii=0;ii<lavas.length;ii++)
+		{
+			ctx.fillStyle = "#FF0000";
+			ctx.fillRect(lavas[ii].getX() + refX,lavas[ii].getY() + refY ,lavas[ii].getWidth(), lavas[ii].getHeight());
+		}
+		
+		
+		//ctx.fillStyle = "#00FF00";
+		//ctx.fillRect(0,0,10,canvas.height/3);
 	}
-	
-	
-	
-	//console.log(steaks.length);
-	
-	//steaks
-	for(var ii=0;ii<steaks.length;ii++)
+	else //if we are in a transition
 	{
-		drawer.drawSprite(steaks[ii],steaks[ii].x,steaks[ii].y);
+		//Background
+		ctx.fillStyle = "#000";
+		ctx.fillRect(0,0,canvas.width, canvas.height);
+		
+		ctx.fillStyle = "#FFF";
+		drawer.drawText("Transition to the next level","32px Arial", 150,200);
+		if(userCanConfirm)
+		{
+			drawer.drawText("Press Enter to continue","20px Arial", 200,400);
+		}
 	}
-	
-	ctx.fillStyle = "#000000";
-	drawer.drawText("Score: "+score,"20px Arial", 5,20);
-	
-	
-	if(isJumping || isFalling)
-	{
-		//hat.draw(ctx);
-		drawer.drawSprite(hat, hat.x+chefRefX, hat.y);
-	}
-	//chef.draw(ctx);
-	drawer.drawSprite(chef,chef.x + chefRefX ,chef.y);
-	
-	drawer.drawSprite(grill, grill.x + refX, grill.y + refY);
-	
-	if(!isFire)
-	{
-		drawer.drawText("Collect the steaks!","30px Arial", 500,30);
-	}
-	else if(isFire && !levelcomplete)
-	{
-		drawer.drawText("Go to the Grill!","30px Arial", 500,30);
-	}
-	if(levelcomplete)
-	{
-		drawer.drawText("Level Complete!!!1!!","64px Arial", 200,200);
-	}
-	
-	//lavas
-	for(var ii=0;ii<lavas.length;ii++)
-	{
-		ctx.fillStyle = "#FF0000";
-		ctx.fillRect(lavas[ii].getX() + refX,lavas[ii].getY() + refY ,lavas[ii].getWidth(), lavas[ii].getHeight());
-	}
-	
-	
-	ctx.fillStyle = "#00FF00";
-	ctx.fillRect(0,0,10,canvas.height/2);
 }
 
 Game.fps = 50;
@@ -834,7 +937,8 @@ $(document).keydown(function(event)
 {
 	//console.log(event.keyCode);
 	var key = event.keyCode;
-	if(userControl)
+	
+	if(userControl) //if the user is allowed to control Chef
 	{
 		if(key == 32)
 		{
@@ -871,6 +975,14 @@ $(document).keydown(function(event)
 			}
 		}
 	}
+	
+	if(userCanConfirm) // if the user can end a transition
+	{
+		if(key == 13) //Enter Key
+		{
+			userConfirmedTransition = true;
+		}
+	}
 });
 
 $(document).keyup(function(event)
@@ -900,5 +1012,9 @@ $(document).keyup(function(event)
 		//down arrow
 		//fallIndex = currentPlatform;
 		//fall();
+	}
+	if(key == 13)
+	{
+		userConfirmedTransition = false;
 	}
 });
