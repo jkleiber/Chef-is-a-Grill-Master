@@ -10,6 +10,7 @@ var nextLevelTransition=false;
 var score = 0, levelscore=0;
 var userControl = true;
 var chefInPos = true;
+var levelName;
 
 //Transitions
 var transitionFirstRun = true;
@@ -28,6 +29,8 @@ var drawer;
 //Scrolling Trickery
 var refX = 0;
 var refY = 0;
+var oldRefX = 0, oldRefY = 0;
+var refXSpeed = 0, refYSpeed = 0;
 
 var xMax = 1200;
 var yMax = 800;
@@ -44,9 +47,12 @@ var left=false, right=false;
 
 //Chef
 var chef;
-var chef_speed = 5;
+var chef_speed = 0;
 var oldChefX, oldChefY;
 var chefRefX = 0;
+var yVel = 0;
+//var gravity = 1.2; <- original value from tutsplus
+var gravity = .7;
 
 //Hat
 var hat;
@@ -65,15 +71,16 @@ var steaks;
 var steakMids = [];
 var enRoute = [];
 
+//Block
+var blocks = [];
+
 /* Physics */
 var defyPhysics = false; 
 var nextPlatformY, nextY;
 var landed = false;
 
 //Jumps
-var yVel = 0;
-//var gravity = 1.2; <- original value from tutsplus
-var gravity = .7;
+
 var isJumping = false;
 var isFalling = false;
 var fallTargetLocked=false, targetPlatform=0;
@@ -86,31 +93,100 @@ var landY = 380; //default to land on ground
 * Platform 0 is always the ground 
 * Platforms must be ordered from lowest to highest
 */
-var level = level || 1;
+var level = level || 0;
 var platforms,lavas;
 var currentPlatform=0, fallIndex=0;
 
 //When the canvas is ready, initialize
 $(document).ready(function() {
 /* Game Management & Drawing */
-isPlaying = true;
 canvas = document.getElementById("renderView");
 ctx = canvas.getContext("2d");
+//ctx.canvas.width  = window.innerWidth;
 
 drawer = new Drawings(ctx); //Be able to draw
 stageLoader = new StageLoader(canvas); //Prepare for the stage
 
 goToNextLevel();
-
+/*
 $([window, document]).focusin(function(){
       Game.run();
    }).focusout(function(){
       Game.pause();
    });
+*/
+   
+/* Fixed Time Step Rendering */
+Game.run = (function() {
+	var loops = 0, 
+		skipTicks = 1000 / Game.fps,
+		maxFrameSkip = 10,
+		nextGameTick = timer.getTimestamp();
+		
+	var renderStartTime = timer.getTimestamp();
+  
+	return function() {
+		loops = 0;
+		
+		var delta = timer.getTimestamp() - renderStartTime;
+		
+		while (delta > nextGameTick && loops < maxFrameSkip) {
+			Game.update();
+			nextGameTick += skipTicks;
+			loops++;
+		}
+		var interpolation = (delta + skipTicks - nextGameTick) / skipTicks;
+		
+		ctx.clearRect(0, 0, canvas.width, canvas.height);
+		Game.paint(interpolation);
+	};
+})();
+
+// Start the game loop
+// Game._intervalId = setInterval(Game.run, 0);
+
+// Optimal Refresh Rate  Thing 
+(function() {
+	var onEachFrame;
+	if (window.webkitRequestAnimationFrame) 
+	{
+		onEachFrame = function(cb) {
+			var _cb = function() 
+			{ 
+				cb(); 
+				webkitRequestAnimationFrame(_cb); 
+			}
+			_cb();
+		};
+	} 
+	else if (window.mozRequestAnimationFrame) 
+	{
+		onEachFrame = function(cb) {
+			var _cb = function() 
+			{ 
+				cb(); 
+				mozRequestAnimationFrame(_cb); 
+			}
+			_cb();
+		};
+	} 
+	else 
+	{
+		onEachFrame = function(cb) 
+		{
+			setInterval(cb, 1000 / 60);
+		}
+	}
+  
+	window.onEachFrame = onEachFrame;
+})();
+
+window.onEachFrame(Game.run);
+
 });
 
 var Game = function(){};
-
+Game.fps = 50;
 
 //Physics from tutsplus (http://gamedevelopment.tutsplus.com/tutorials/quick-tip-avoid-game-watch-gravity-in-your-characters-jumps--gamedev-6759)
 function jump() {
@@ -141,7 +217,7 @@ function chefBestAbove()
 	
 	for(var ii=0;ii<platforms.length;ii++)
 	{
-		if((chef.y + 64) <= platforms[ii].y + refY)
+		if(chef.y <= platforms[ii].y + refY - 64)
 		{
 			highest = ii;
 		}
@@ -150,12 +226,26 @@ function chefBestAbove()
 	return highest;
 }
 
+/*
+* Checks to see if Chef's feet are above or on the platform
+*/
 function canChefLand(ii)
 {
-	if((chef.x + 32) >= platforms[ii].x && (chef.x + 32) <= (platforms[ii].x + platforms[ii].w)) //if chef is halfway on, he can land
+	if(chef.orient == "right")
 	{
-		return true;
+		if((chef.x+40) >= platforms[ii].x && (chef.x + 23) <= (platforms[ii].x + platforms[ii].w))
+		{
+			return true;
+		}
 	}
+	else
+	{
+		if((chef.x+40) >= platforms[ii].x && (chef.x + 23) <= (platforms[ii].x + platforms[ii].w))
+		{
+			return true;
+		}
+	}
+	
 	return false;
 }
 
@@ -170,9 +260,9 @@ function whereWillChefJump()
 		
 		if(land)
 		{
-			
-			landY = platforms[ii].y + refY - 64;
+			//landY = platforms[ii].y + refY - 64;
 			currentPlatform = ii;
+			targetPlatform = ii;
 			//console.log("Chef will land at y = " + landY);
 			break;
 		}
@@ -222,11 +312,11 @@ function hover(sprite,middle,tolerance)
 
 function chefCollision(sprite)
 {
-	if (chef.y+64<sprite.y + refY)
+	if (chef.y+64<sprite.y+refY)
 	{
         return false;
     }
-    if (chef.y>sprite.y+sprite.h + refY)
+    if (chef.y>sprite.y+sprite.h+refY)
 	{
 		return false;
     }
@@ -247,19 +337,22 @@ function goToGrill(sprite)
 	var x = sprite.x;
 	var y = sprite.y;
 	
-	xErr = grill.x - x;
-	yErr = (grill.y+22) - y; //the grill top is actually 22 pixels below the image origin
+	xErr = (grill.x+32) - x;
+	yErr = (grill.y+32) - y; //the grill top is actually 22 pixels below the image origin
 	
 	xErr *= pace;
 	yErr *= pace;
 	
 	sprite.x += xErr;
 	sprite.y += yErr;
+	/*
+	sprite.x = grill.x;
+	sprite.y = grill.y;*/
 }
 
 function onGrill(sprite)
 {
-	if (grill.y+refY+64<sprite.y + refY)
+	if (grill.y+64+refY<sprite.y+refY)
 	{
         return false;
     }
@@ -267,11 +360,11 @@ function onGrill(sprite)
 	{
 		return false;
     }
-    if (grill.x+refX+64<sprite.x+refX)
+    if (grill.x+64<sprite.x)
 	{
 		return false;
     }
-    if (grill.x+refX>sprite.w+sprite.x+refX)
+    if (grill.x>sprite.w+sprite.x)
 	{
 		return false;
     }
@@ -313,6 +406,11 @@ function chefInPosition(x,y)
 		return false;
     }
     return true;
+}
+
+function goToMenu()
+{
+	//eventually the main menu will go here
 }
 
 function goToNextLevel()
@@ -358,6 +456,7 @@ function goToNextLevel()
 	levelscore = 0;
 	
 	platforms = stageLoader.getPlatforms(level);
+	blocks = stageLoader.getBlocks(level);
 	
 	steaks = stageLoader.getSteaks(level);
 	steakMids = stageLoader.getSteakMids(level);
@@ -367,7 +466,7 @@ function goToNextLevel()
 		steaks[ii].setHeight(32);
 		steaks[ii].scorable = true;
 	}
-	console.log(steaks.length);
+	//console.log(steaks.length);
 	
 	lavas = stageLoader.getLavas(level);
 	
@@ -399,10 +498,9 @@ function goToNextLevel()
 	}
 }
 /* Scrolling Y */
-
+var pace = 0.025;
 function pidYScrollUp()
 {
-	var pace = 0.033;
 	var y = chef.y;
 	
 	yErr = (canvas.height/3) - y;
@@ -412,12 +510,37 @@ function pidYScrollUp()
 	refY += yErr;
 }
 
+/* Blocks */
+function blockedRight(ii)
+{
+	if(chef.x+64 < blocks[ii].x)
+	{
+		return false;
+	}
+	else if(chef.y+64 < blocks[ii].y)
+	{
+		return false;
+	}
+	else if(chef.y > blocks[ii].y)
+	{
+		return false;
+	}
+	else if(chef.x > blocks[ii].x)
+	{
+		return false;
+	}
+	
+	return true;
+}
+
+
 Game.update = function()
 {
 	
 	//console.log("Current Platform: " + currentPlatform);
 	if(left)
 	{
+		chef_speed = -5;
 		chef.setOrientation("left");
 		if(!isJumping && !isFalling)
 		{
@@ -426,7 +549,7 @@ Game.update = function()
 		
 		if(chef.getX()>0)
 		{
-			chef.setX(chef.getX()-chef_speed);
+			chef.x+=chef_speed;
 		}
 		else
 		{
@@ -435,6 +558,7 @@ Game.update = function()
 	}
 	if(right)
 	{
+		chef_speed = 5;
 		chef.setOrientation("right");
 		if(!isJumping && !isFalling)
 		{
@@ -445,17 +569,38 @@ Game.update = function()
 		//console.log((chef.x+64) + " vs " + canvas.width);
 		if((chef.x + chefRefX + 64) < canvas.width) //chef is 64 px wide
 		{
-			chef.setX(chef.getX()+chef_speed);
+			var blocked=false;
+			var bi=0;
+			for(var ii=0;ii<blocks.length;ii++)
+			{
+				blocked = blockedRight(ii);
+				bi = ii;
+				
+				if(blocked)
+				{
+					break;
+				}
+			}
+			if(!blocked)
+			{
+				chef.x+=chef_speed;
+			}
+			else
+			{
+				chef.setX(blocks[bi].x-64);
+			}
 		}
 		else
 		{
 			chef.setX(canvas.width - chefRefX - 64);
 		}
 	}
-	
+	if(!right && !left)
+	{
+		chef_speed=0;
+	}
+
 	if (isJumping) {
-		
-		
 		
 		if(chef.getOrientation() == "right")
 		{
@@ -468,7 +613,26 @@ Game.update = function()
 			hat.setImage("./graphics/hat_left.png");
 		}
 		
-		whereWillChefJump();
+		if(yVel < 0 || !canChefLand(targetPlatform) || targetPlatform==0)
+		{
+			whereWillChefJump();
+			//console.log("yVel: "+ yVel);
+			//console.log("canChefLand: "+ canChefLand(targetPlatform) + " t: " + targetPlatform);
+			//console.log("Jumping to: "+ targetPlatform);
+		}
+		//console.log(landY + " vs " + chef.y);
+		
+		var yErr = 0;
+		if(refY < Math.abs(yMax) && chef.y + refY <= (canvas.height/3) && yVel < 0)
+		{
+			yErr = ((canvas.height/3) - chef.y) * 0.025;
+		}
+		else if(refY > 0 && chef.y > (canvas.height/3) && yVel > 0)
+		{
+			yErr = chef.y - oldChefY;
+		}
+		
+		landY = platforms[targetPlatform].y + (refY + yErr) - 64;
 		
 		yVel += gravity;
 		chef.y += yVel;
@@ -476,7 +640,7 @@ Game.update = function()
 		hat_yVel += hat_gravity;
 		hat.y += hat_yVel;
 		
-        if (chef.y > landY) 
+        if (chef.y >= landY) 
 		{
             chef.y = landY;
 			hat.y = landY;
@@ -539,7 +703,7 @@ Game.update = function()
 				whereWillChefFall();
 			}
 			
-			if(chef.x != oldChefX)
+			if(!canChefLand(targetPlatform) || targetPlatform == 0)
 			{
 				fallTargetLocked = false;
 			}
@@ -582,7 +746,7 @@ Game.update = function()
 				//chef.y = landY;
 				//hat.y = landY;
 				
-				console.log("landed at " + chef.y);
+				//console.log("landed at " + chef.y);
 				
 				yVel = 0;
 				isFalling = false;
@@ -591,18 +755,22 @@ Game.update = function()
 		}
 	}
 	
-	if(space)
+	if(space) //Diagnostics
 	{
+		//console.log(chef.x);
+		//console.log(canvas.width);
 		//console.log(scrollDiff);
 		//console.log((platforms[targetPlatform].y - 64 + refY));
-		console.log("(" + chef.x + "," + (chef.y-refY) +")");
+		//console.log("(" + chef.x + "," + (chef.y-refY) +")");
 		//console.log("CY: " + chef.y + " \ PY: " + (platforms[currentPlatform].y - 64 + refY) + " \ CP: " + currentPlatform + " \ RY: " + refY);
 	}
 	
 	for(var ii=0;ii<steaks.length;ii++)
 	{
-		hover(steaks[ii],steakMids[ii],5);
-		
+		if(steaks[ii].scorable && steaks[ii].visible)
+		{
+			hover(steaks[ii],steakMids[ii],5);
+		}
 		if(chefCollision(steaks[ii]) && steaks[ii].scorable)
 		{
 			levelscore++;
@@ -620,10 +788,13 @@ Game.update = function()
 		
 		if(onGrill(steaks[enRoute[ei]]))
 		{
+			//steaks[ei].visible = false;
 			var removed = enRoute[ei];
-			enRoute.splice(ei,1);
+			//console.log("Steak #" + removed + " has been grilled!");
+			
 			steaks.splice(enRoute[ei],1);
 			steakMids.splice(enRoute[ei],1);
+			enRoute.splice(ei,1);
 			
 			for(var ii=0;ii<enRoute.length;ii++)
 			{
@@ -714,9 +885,36 @@ Game.update = function()
 		}
 	//}
 	
+	/*Scrolling Velocity calculations for interpolation*/
+	//X Scroll Velocity
+	if(refX != oldRefX && refX>0 && refX+xMax < canvas.width)
+	{
+		refXSpeed = refX - oldRefX;
+	}
+	else
+	{
+		refXSpeed = 0;
+	}
+	
+	//Y Scroll Velocity
+	if(refY != oldRefY)
+	{
+		if(refY > 0 && chef.y > canvas.height/3) //Falling Case
+		{
+			refYSpeed = refY - oldRefY;
+		}
+		if(refY < Math.abs(yMax) && (chef.y + refY <= (canvas.height/3)) && chef.y!=oldChefY)
+		{
+			refYSpeed = refY - oldRefY;
+		}
+	}
+	
 	hat.x = chef.x;
 	oldChefX = chef.x;
 	oldChefY = chef.y;
+	
+	oldRefX = refX;
+	oldRefY = refY;
 	
 	if(levelscore == startSteaks && !isFire)
 	{
@@ -770,10 +968,11 @@ Game.update = function()
 		goToNextLevel();
 	}
 	
+	
 }
 
-Game.paint = function()
-{
+Game.paint = function(i)
+{ 
 	if(!nextLevelTransition) //if we are playing
 	{
 		//Background
@@ -781,13 +980,58 @@ Game.paint = function()
 		ctx.fillRect(0,0,canvas.width, canvas.height);
 		
 		
-		//THE GROUND IS PLATFORM 0
+		//THE GROUND IS PLATFORM 0 (for now, I am going to need a different system when blocks comeinto play)
 	
 		//platforms
 		for(var ii=0;ii<platforms.length;ii++)
 		{
-			ctx.fillStyle = "#000000";
-			ctx.fillRect(platforms[ii].getX() + refX,platforms[ii].getY() + refY ,platforms[ii].getWidth(), platforms[ii].getHeight());
+			console.log(xx);
+			
+			if(platforms[ii].type == "black")
+			{
+				ctx.fillStyle = "#000000";
+				ctx.fillRect(platforms[ii].getX() + refX  + (refXSpeed * i),platforms[ii].getY() + refY + (refYSpeed * i),platforms[ii].getWidth(), platforms[ii].getHeight());
+			}
+			else if(platforms[ii].type == "blue_block")
+			{
+				var xx = platforms[ii].x;
+				
+				if(xx + 20 + refX < 0)
+				{
+					while(xx+20+refX<0)
+					{
+						xx+=20;
+					}
+				}
+				
+				while(xx+20+refX <= canvas.width && xx+20 <= platforms[ii].getX() + platforms[ii].getWidth())
+				{
+					console.log(xx);
+					drawer.drawSprite(new Sprite(xx + (refXSpeed * i),platforms[ii].getY() + refY+ (refYSpeed * i),"./graphics/block.png"),xx+refX,platforms[ii].getY() + refY);
+					xx+=20;
+				}
+				
+			}
+			else if(platforms[ii].type == "ground")
+			{
+				var xx = platforms[ii].x;
+				
+				if(xx + 45 + refX < 0)
+				{
+					while(xx+45+refX<0)
+					{
+						xx+=45;
+					}
+				}
+				
+				while(xx+refX <= canvas.width && xx <= platforms[ii].getX() + platforms[ii].getWidth())
+				{
+					console.log(xx);
+					drawer.drawSprite(new Sprite(xx + (refXSpeed * i),platforms[ii].getY() + refY + (refYSpeed * i),"./graphics/ground.png"),xx+refX,platforms[ii].getY() + refY-9);
+					xx+=45;
+				}
+				
+			}
 		}
 		
 		
@@ -797,20 +1041,23 @@ Game.paint = function()
 		//steaks
 		for(var ii=0;ii<steaks.length;ii++)
 		{
-			drawer.drawSprite(steaks[ii],steaks[ii].x + refX,steaks[ii].y + refY);
+			if(steaks[ii].visible = true)
+			{
+				drawer.drawSprite(steaks[ii],steaks[ii].x + refX + (refXSpeed * i),steaks[ii].y + refY);
+			}
 		}
 		
 		ctx.fillStyle = "#000000";
-		drawer.drawText("Score: "+score,"20px Arial", 5,20);
+		drawer.drawText("Score: "+score,"18px BM Space", 5,20);
 		
 		
 		if(isJumping || isFalling)
 		{
 			//hat.draw(ctx);
-			drawer.drawSprite(hat, hat.x+chefRefX, hat.y);
+			drawer.drawSprite(hat, hat.x+chefRefX+ (chef_speed * i), hat.y + (hat_yVel*i));
 		}
 		//chef.draw(ctx);
-		drawer.drawSprite(chef,chef.x + chefRefX ,chef.y);
+		drawer.drawSprite(chef,chef.x + chefRefX + (chef_speed * i), chef.y+(yVel*i));
 		
 		drawer.drawSprite(grill, grill.x + refX, grill.y + refY);
 		
@@ -818,24 +1065,71 @@ Game.paint = function()
 		{
 			if(!isFire)
 			{
-				drawer.drawText("Collect the steaks!","30px Arial", 500,30);
+				drawer.drawText("Collect the steaks!","18px BM Space", 500,30);
 			}
 			else if(isFire && !levelcomplete)
 			{
-				drawer.drawText("Go to the Grill!","30px Arial", 500,30);
+				drawer.drawText("Go to the Grill!","18px BM Space", 500,30);
 			}
 			if(levelcomplete)
 			{
-				drawer.drawText("Level Complete!!!1!!","64px Arial", 200,200);
+				drawer.drawText("Level Complete!!!1!!","30px BM Space", 200,200);
 			}
 		}
 		//lavas
 		for(var ii=0;ii<lavas.length;ii++)
 		{
 			ctx.fillStyle = "#FF0000";
-			ctx.fillRect(lavas[ii].getX() + refX,lavas[ii].getY() + refY ,lavas[ii].getWidth(), lavas[ii].getHeight());
+			ctx.fillRect(lavas[ii].getX() + refX,lavas[ii].getY() + refY -9 ,lavas[ii].getWidth(), lavas[ii].getHeight()+9);
+			
+			/*
+			if(lavas[ii].type == "ground_lava")
+			{
+				var xx = lavas[ii].x;
+				
+				if(xx + 20 + refX < 0)
+				{
+					while(xx+20+refX<0)
+					{
+						xx+=20;
+					}
+				}
+				
+				while(xx+20+refX <= canvas.width && xx+36 <= lavas[ii].getX() + lavas[ii].getWidth())
+				{
+					console.log(xx);
+					drawer.drawSprite(new Sprite(xx,lavas[ii].getY() + refY,"./graphics/lava.png"),xx+refX,lavas[ii].getY() + refY);
+					xx+=20;
+				}
+				
+			}
+			if(lavas[ii].type == "lava")
+			{
+				var xx = lavas[ii].x;
+				
+				if(xx + 45 + refX < 0)
+				{
+					while(xx+45+refX<0)
+					{
+						xx+=36;
+					}
+				}
+				
+				while(xx+45+refX <= canvas.width && xx+45 <= lavas[ii].getX() + lavas[ii].getWidth())
+				{
+					console.log(xx);
+					drawer.drawSprite(new Sprite(xx,lavas[ii].getY() + refY,"./graphics/lava.png"),xx+refX,lavas[ii].getY() + refY);
+					xx+=45;
+				}
+				
+			}*/
 		}
 		
+		for(var ii=0;ii<blocks.length;ii++)
+		{
+			drawer.drawSprite(blocks[ii],blocks[ii].getX()+refX, blocks[ii].getY()+refY);
+		}
+				
 		
 		//ctx.fillStyle = "#00FF00";
 		//ctx.fillRect(0,0,10,canvas.height/3);
@@ -855,72 +1149,9 @@ Game.paint = function()
 	}
 }
 
-Game.fps = 50;
-
-/* Fixed Time Step Rendering */
-Game.run = (function() {
-	var loops = 0, skipTicks = 1000 / Game.fps,
-		maxFrameSkip = 10,
-		nextGameTick = timer.getTimestamp();
-  
-	return function() {
-		loops = 0;
-		
-		while (timer.getTimestamp() > nextGameTick && loops < maxFrameSkip) {
-			Game.update();
-			nextGameTick += skipTicks;
-			loops++;
-		}
-		ctx.clearRect(0, 0, canvas.width, canvas.height);
-		Game.paint();
-	};
-})();
-
-// Start the game loop
-Game._intervalId = setInterval(Game.run, 0);
 
 
-
-/* Optimal Refresh Rate  Thing 
-(function() {
-	var onEachFrame;
-	if (window.webkitRequestAnimationFrame) 
-	{
-		onEachFrame = function(cb) {
-			var _cb = function() 
-			{ 
-				cb(); 
-				webkitRequestAnimationFrame(_cb); 
-			}
-			_cb();
-		};
-	} 
-	else if (window.mozRequestAnimationFrame) 
-	{
-		onEachFrame = function(cb) {
-			var _cb = function() 
-			{ 
-				cb(); 
-				mozRequestAnimationFrame(_cb); 
-			}
-			_cb();
-		};
-	} 
-	else 
-	{
-		onEachFrame = function(cb) 
-		{
-			setInterval(cb, 1000 / 60);
-		}
-	}
-  
-	window.onEachFrame = onEachFrame;
-})();
-
-window.onEachFrame(Game.run);
-*/
-
-
+/*
 Game.pause = function()
 {
 	clearInterval(Game.intervalId);
@@ -929,7 +1160,7 @@ Game.pause = function()
 	ctx.font = "30px Arial";
 	ctx.fillText("Game Paused!!!1!",10,50);
 }
-
+*/
 
 //Keyboard handlers
 

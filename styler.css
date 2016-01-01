@@ -1,0 +1,17 @@
+@font-face
+{
+	font-family: 'Minecraft';
+	src: url('./fonts/Minecraft.eot?') format('eot'), url('./fonts/Minecraft.woff') format('woff'), url('./fonts/Minecraft.ttf') format('truetype');	
+}
+@font-face
+{
+	font-family: 'BM Space';
+	src: url('./fonts/BM space.eot?') format('eot'), url('./fonts/BM space.woff') format('woff'), url('./fonts/BM space.ttf') format('truetype');
+}
+
+html, body {
+  width:  100%;
+  height: 100%;
+  margin: 0px;
+}
+

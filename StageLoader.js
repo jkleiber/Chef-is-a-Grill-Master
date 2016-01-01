@@ -12,27 +12,47 @@ var levelNames;
 var xMaxes;
 var yMaxes;
 
+var blocks;
+
 var StageLoader = function(canvas){
 	
 	this.xMaxes = [800,1200];
+	
 	this.yMaxes = [0,-200];
+	
 	this.levelNames = ["Tutorial","The First Cookout"];
-	this.platforms = [	[new Platform(0,444,canvas.width, (480-444)),new Platform(500,330,300,20), new Platform(200,240,150,20), new Platform(100,100,100,20)],
-						[new Platform(0,444,1200, (480-444)), new Platform(0,300,100, 20), new Platform(900,300,100, 20), new Platform(0,150,100, 20), new Platform(0,30,100, 20), new Platform(200,-30,600, 20)]
+	
+	this.platforms = [	[new Platform(0,444,canvas.width, (480-444),"ground"),new Platform(500,330,300,20,"blue_block"), new Platform(200,240,150,20,"blue_block"), new Platform(100,100,100,20,"blue_block")],
+						[new Platform(0,444,1200,(480-444),"ground"), new Platform(0,300,100, 20,"blue_block"), new Platform(900,300,100, 20,"blue_block"), new Platform(250,250,100, 20,"blue_block"), new Platform(520,225,200, 20,"blue_block"), new Platform(0,150,100, 20,"blue_block"), new Platform(0,30,100, 20,"blue_block"), new Platform(200,-30,600, 20,"blue_block")],
+						[new Platform(0,444,canvas.width, (480-444),"ground")]
 						];
+						
 	this.lavas = [	[],
-					[new Platform(120,444,900,(480-444))]
+					[new Platform(120,444,900,(480-444),"ground_lava")],
+					[]
 					];
+					
 	this.steaks = [	[new Sprite(180,160,"./graphics/steak.png"), new Sprite(400,380,"./graphics/steak.png"), new Sprite(600,220,"./graphics/steak.png"), new Sprite(750,220,"./graphics/steak.png")],
-					[new Sprite(20,268,"./graphics/steak.png"), new Sprite(20,116,"./graphics/steak.png"), new Sprite(880,267,"./graphics/steak.png"), new Sprite(230,-94,"./graphics/steak.png"), new Sprite(330,-94,"./graphics/steak.png"), new Sprite(430,-94,"./graphics/steak.png"), new Sprite(530,-94,"./graphics/steak.png"), new Sprite(630,-94,"./graphics/steak.png"), new Sprite(730,-94,"./graphics/steak.png")]
+					[new Sprite(20,268,"./graphics/steak.png"), new Sprite(20,116,"./graphics/steak.png"), new Sprite(880,267,"./graphics/steak.png"), new Sprite(230,-94,"./graphics/steak.png"), new Sprite(330,-94,"./graphics/steak.png"), new Sprite(430,-94,"./graphics/steak.png"), new Sprite(530,-94,"./graphics/steak.png"), new Sprite(630,-94,"./graphics/steak.png"), new Sprite(730,-94,"./graphics/steak.png"), new Sprite(624,193,"./graphics/steak.png"), new Sprite(540,193,"./graphics/steak.png")],
+					[]
 					];
+					
 	this.steakMids = [	[160,380,220,220],
-						[268,116,267,-94,-94,-94,-94,-94,-94]
+						[268,116,267,-94,-94,-94,-94,-94,-94,193,193],
+						[]
 						];
-	this.startSteaks = [4,100];
+						
+	this.startSteaks = [4,11];
+	
 	this.grills = [	[100,36],
-					[1100,380]
+					[1100,380],
+					[]
 					];
+					
+	this.blocks = [	[],
+					[new Sprite(100,424,"./graphics/pink_block.png")],
+					[]
+					]
 	
 };
 
@@ -89,6 +109,11 @@ StageLoader.prototype.getXMax = function(level)
 StageLoader.prototype.getYMax = function(level)
 {
 	return this.yMaxes[level];
+}
+
+StageLoader.prototype.getBlocks = function(level)
+{
+	return this.blocks[level];
 }
 
 

@@ -11,15 +11,18 @@ var h=0;
 var isUp = true;
 
 var scorable = false;
+var visible = true;
 
 var orient = "right";
 var Sprite = function(){
-
+	this.visible = true;
 };
 
 var Sprite = function(x,y){
 	this.setX(x);
 	this.setY(y);
+	
+	this.visible = true;
 };
 
 var Sprite = function(x,y,path){
@@ -35,6 +38,8 @@ var Sprite = function(x,y,path){
 		//this.setWidth(this.width);
 		//this.setHeight(this.height);
 	}
+	
+	this.visible = true;
 };
 
 

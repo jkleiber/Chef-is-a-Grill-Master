@@ -3,9 +3,10 @@
 ?>
 <html>
 	<head>
-		<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+		<!--<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"> !-->
 		
 		<link rel="icon" type="image/png" href="http://bbqfrc.x10host.com/favicon.png">
+		<link rel="stylesheet" type="text/css" href="styler.css">
 		<title>Chef is a Grillmaster</title>
 		
 		<script src="jquery-1.11.1.min.js"></script>
